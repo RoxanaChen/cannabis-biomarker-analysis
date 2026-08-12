@@ -1,0 +1,635 @@
+---
+title: 'Why Breath is Not Enough: Comprehensive Cannabis Cutoffs for Cops'
+author: 'Roxana Chen, Sehee Kim, Jorge Ramos, Jiayi Xue'
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    code_folding: show
+  pdf_document:
+    toc: true
+---
+
+```{r setup, include=FALSE}
+# control global Rmd chunk settings
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE)
+```
+
+## Introduction & Question
+Driving under the influence (DUI) has become a serious problem recently with an average of 6 million driving accidents in the U.S. per year and ~60% testing positive for alcohol or drugs [^1]. Although there is strong evidence on the relationship between alcohol DUI and increase in motor vehicle accidents, we have yet to figure out the direct relationship for cannabis DUI. Due to the lack of scientific evidence, the laws regarding DUIC are uninformed, inconsistent throughout states and unreliable [^2]. There are a variety of factors to consider impairment on a person when they use cannabis especially after a certain amount of time. **This leads to our question, which compound, in which matrix, and at what cutoff is the best biomarker of recent use?** 
+
+We were given data with 191 participants at the ages of 21 to 55 year olds who were separated into two different groups - occasional/frequent user - and assigned three different treatments - placebo (0.02% THC), low dose (5.9% THC), and high dose (13.4% THC) - measured in three different fluid types - whole blood (WB), oral fluid (OF), and breath (BR). These measurements were taken periodically from pre-smoking to 300+ minutes post-smoking (timepoint). The compounds measured from these fluid types were THC, CBD, CBN, CBG, THCV, THCOH, THCCOOH, THCCOOH-gluc, and THCA-A. The cannabinoid compounds that are extracted from the cannabis plants are: THC, CBD, CBN, CBG, and THCV. The metabolite compounds that break down the cannabinoids are: THCOH, THCCOOH, THCCOOH-gluc, and THCA-A [^3]. More details of the study can be found in this article [^4].
+  
+As we find our answer, we also consider that breath fluid type is the easiest and quickest sample to gather, oral fluid second, and whole blood last as blood samples are not as practical at a road side. Adding on, oral fluid and whole blood results will take the longest to achieve as they will be sent to the lab. Lastly, the majority of cannabis users drive once they do not feel impaired, on average after 2-4 hours their initial intake [^5]. This is a characteristic we need to consider as the level of compounds differ by the time period. 
+
+[^1]: https://academic.oup.com/clinchem/article/59/3/478/5621997
+[^2]: https://www.tandfonline.com/doi/full/10.1080/15389588.2020.1851685
+[^3]: https://www.thepermanentejournal.org/doi/10.7812/TPP/19.200
+[^4]: https://academic.oup.com/jat/article/45/8/820/6311388?login=false#google_vignette
+[^5]: https://www.thezebra.com/resources/research/marijuana-driving-survey/ 
+
+## The Data
+
+
+### Data Import
+In our data analysis, we are examining three different matrices of fluid types: whole blood (WB), oral fluid (OF), and breath (BR). The WB matrix examines the cannabinoids THC, CBD, CBN, CBG, THCV, and the metabolites THCOH, THCCOOH, THCCOOH-gluc. The OF matrix examines the cannabinoids THC, CBD, CBN, CBG, THCV, and the metabolites THCOH and THCA-A. Lastly, the BR matrix examines solely the cannabinoid THC and no metabolites.
+
+```{r load-packages, message=FALSE}
+library(tidyverse)
+library(janitor)
+```
+
+```{r}
+WB <- read_csv("./data/Blood.csv")
+BR <- read_csv("./data/Breath.csv")
+OF <- read_csv("./data/OF.csv")
+```
+
+### Data Wrangling
+
+**Combining WB, OF, and BR into one dataset**
+
+To clean and wrangle our data, we combined all three matrices WB, OF, and BR into one dataset. In each dataset, we edited a column named "timepoint" to create different bins of time, for example "0-30 min" for measurements taken between those times, in order to organize the continuous variable of time into something more discrete to aid later data analysis. These time bins vary across the datasets.
+```{r}
+WB <- WB |> 
+  janitor::clean_names() |>
+  rename(thcoh = x11_oh_thc,
+         thccooh = thc_cooh,
+         thccooh_gluc = thc_cooh_gluc,
+         thcv = thc_v)|>
+  mutate(timepoint = case_when(time_from_start < 0 ~ "pre-smoking",
+                               time_from_start > 0 & time_from_start <= 30 ~ "0-30 min",
+                               time_from_start > 30 & time_from_start <= 70 ~ "31-70 min",
+                               time_from_start > 70 & time_from_start <= 100 ~ "71-100 min",
+                               time_from_start > 100 & time_from_start <= 180 ~ "101-180 min",
+                               time_from_start > 180 & time_from_start <= 210 ~ "181-210 min",
+                               time_from_start > 210 & time_from_start <= 240 ~ "211-240 min",
+                               time_from_start > 240 & time_from_start <= 270 ~ "241-270 min",
+                               time_from_start > 270 & time_from_start <= 300 ~ "271-300 min",
+                               time_from_start > 300 ~ "301+ min"))
+
+
+OF <- OF |>
+  mutate(Group = fct_recode(Group,
+                            "Occasional user" = "Not experienced user",
+                            "Frequent user" = "Experienced user")) |>
+  janitor::clean_names() |>
+  rename(thcoh = x11_oh_thc,
+         thcv = thc_v,
+         fluid_type = fluid)|>
+  mutate(timepoint = case_when(time_from_start < 0 ~ "pre-smoking",
+                               time_from_start > 0 & time_from_start <= 30 ~ "0-30 min",
+                               time_from_start > 30 & time_from_start <= 90 ~ "31-90 min",
+                               time_from_start > 91 & time_from_start <= 180 ~ "91-180 min",
+                               time_from_start > 181 & time_from_start <= 210 ~ "181-210 min",
+                               time_from_start > 211 & time_from_start <= 240 ~ "211-240 min",
+                               time_from_start > 241 & time_from_start <= 270 ~ "241-270 min",
+                               time_from_start > 271 ~ "271+ min"))
+
+
+
+BR <- BR |>
+  mutate(Group = fct_recode(Group,
+                            "Occasional user" = "Not experienced user",
+                            "Frequent user" = "Experienced user")) |>
+  janitor::clean_names() |>
+  rename(thc = thc_pg_pad,
+         fluid_type = fluid)|>
+  mutate(timepoint = case_when(time_from_start < 0 ~ "pre-smoking",
+                               time_from_start > 0 & time_from_start <= 40 ~ "0-40 min",
+                               time_from_start > 41 & time_from_start <= 90 ~ "41-90 min",
+                               time_from_start > 91 & time_from_start <= 180 ~ "91-180 min",
+                               time_from_start > 181 & time_from_start <= 210 ~ "181-210 min",
+                               time_from_start > 211 & time_from_start <= 240 ~ "211-240 min",
+                               time_from_start > 241 & time_from_start <= 270 ~ "241-270 min",
+                               time_from_start > 271 ~ "271+ min"))
+
+combined_df = bind_rows(WB, OF, BR)
+write_csv(combined_df, "combined_df.csv")
+
+# View(combined_df)
+```
+
+## Analysis
+
+**Disregarding Treatment**
+
+The preliminary step we took in our data analysis was to ignore the variable of different treatment groups.
+```{r excluding treatment}
+ggplot(data = combined_df, aes(x = time_from_start, y = thc, color = treatment)) +
+  geom_point() +
+  labs(title = "THC (Compound Level) Over Time by Treatment",
+       x = "Time from start (minutes)",
+       y = "THC Level (ng/mL)",
+       color = "Treatment") +
+  theme_minimal()
+```
+
+As we can see from the graph above, the low dose (5.90% THC) and high dose (13.40% THC) are very intermixed. We do not see a significant difference between the treatment groups, and for that reason we will not be taking them into account in our analysis, although they were included in the study.
+
+### First Examination: THC in Breath
+
+**Choosing Breath Matrix & THC Compound**
+
+Now, we look at the THC levels over time for all three matrices: breath, oral fluid, and whole blood.
+```{r choosing breath}
+combined_df |>
+  ggplot(data = combined_df, mapping = aes (x= time_from_start, y = thc, color = group))+
+  geom_point(alpha = 0.3) +
+  scale_color_manual(values=c("green", "purple")) +
+  labs(title = "Breath Shows the Highest Levels of THC",
+       subtitle = "Distribution of Compound Levels by Treatment Group (thc)",
+       x = "Time (min)",
+       y = "THC Level (ng/mL)") +
+  facet_wrap(~ fluid_type) +
+  theme_minimal()
+```
+
+Shown above, the breath matrix have a comparably higher THC level compared to oral fluid and whole blood. Since the cannabis is taken by the mouth and into the lungs, THC measurements through breath are more sensitive and easy to detect. This is a great compound and matrix to utilize as it makes it easier to view cannabis's influence.
+     
+Additionally, breath is the most realistic, practical, and safe method to test at the roadside because results are immediate; they can be quickly utilized to determine release or detainment by the police. For these reasons, we will focus on THC in breath as our compound and matrix of focus.
+
+**Calculating and Plotting Sensitivity & Specificity: Breath**
+
+Sensitivity measures the test’s ability to correctly identify those who have recently used cannabis (true positive), while specificity measures the test’s ability to correctly identify those who did not recently use cannabis (true negative). For the breath test, we prioritize the importance of specificity. In the plots below, we plot the sensitivity and specificity graphs with different cutoffs 100, 500, 1000, 3000, and 5000 ng/mL. 
+```{r BR sens-spec calc}
+make_calculations <- function(dataset, cutoff, compound, timepoint_use){
+  ## remove NAs
+  df <- dataset |>
+    select(treatment, {{ compound }}, timepoint) |>
+    filter(timepoint == timepoint_use, !is.na({{ compound }}))
+
+  if(nrow(df)>0){
+    if(timepoint_use == "pre-smoking"){
+      output <- df |> 
+        summarize(TP = 0,
+                  FN = 0,
+                  FP = sum(!!sym(compound) >= cutoff),
+                  TN = sum(!!sym(compound) < cutoff)) 
+    }else{
+      if(cutoff == 0){
+        output_pre <- df |> 
+          filter(timepoint_use == "pre-smoking") |>
+          summarize(TP = 0,
+                    FN = 0,
+                    FP = sum(!!sym(compound) >= cutoff),
+                    TN = sum(!!sym(compound) < cutoff)) 
+        
+        output <- df |> 
+          filter(timepoint_use != "pre-smoking") |>
+          summarize(TP = sum(treatment != "Placebo" & !!sym(compound) > cutoff),
+                    FN = sum(treatment != "Placebo" & !!sym(compound) <= cutoff),
+                    FP = sum(treatment == "Placebo" & !!sym(compound) > cutoff),
+                    TN = sum(treatment == "Placebo" & !!sym(compound) < cutoff))
+        
+        output <- output + output_pre
+      }else{
+        output_pre <- df |> 
+          filter(timepoint_use == "pre-smoking") |>
+          summarise(TP = 0,
+                    FN = 0,
+                    FP = sum(!!sym(compound) >= cutoff),
+                    TN = sum(!!sym(compound) < cutoff)) 
+        
+        output <- df |> 
+          filter(timepoint_use != "41-90 min") |>
+          summarise(TP = sum(treatment != "Placebo" & !!sym(compound) >= cutoff),
+                    FN = sum(treatment != "Placebo" & !!sym(compound) < cutoff),
+                    FP = sum(treatment == "Placebo" & !!sym(compound) >= cutoff),
+                    TN = sum(treatment == "Placebo" & !!sym(compound) < cutoff))
+        
+        output <- output + output_pre
+      }
+    }
+  
+  # clean things up; make calculations on above values
+  output <- output |>
+    mutate(detection_limit = cutoff,
+           compound = compound,
+           time_window = timepoint_use,
+           NAs = nrow(dataset) - nrow(df),
+           N = nrow(dataset),
+           Sensitivity = (TP/(TP + FN)), 
+           Specificity = (TN /(TN + FP)),
+           PPV = (TP/(TP+FP)),
+           NPV = (TN/(TN + FN)),
+           Efficiency = ((TP + TN)/(TP + TN + FP + FN))*100
+    )
+  return(output)
+}
+}
+sens_spec_cpd <- function(dataset, cpd, timepoints){
+  args2 <- list(start = timepoints$start, 
+                stop = timepoints$stop, 
+                tpt_use = timepoints$timepoint)
+  out <- args2 |> 
+    pmap_dfr(make_calculations, dataset, compound = cpd)
+  return(out)
+}
+```
+
+```{r BR cutoffs}
+# specify which calculations to make
+cs01_nodups <- combined_df |> 
+    filter(!is.na(timepoint)) |> 
+    group_by(fluid_type, timepoint) |> 
+    distinct(id, .keep_all=TRUE) |> 
+    ungroup()
+
+cs01_nodups_long <- cs01_nodups |> 
+  select(1:5,time_from_start,everything()) |>
+  pivot_longer(7:15) 
+
+cutoffs <- c(100, 500, 1000, 3000, 5000)
+compounds <- cs01_nodups_long |> filter(fluid_type=="BR") |> filter(!is.na(value)) |> distinct(name) |> pull(name)
+BR_timepoint <- c("pre-smoking","0-40 min","41-90 min",
+                   "91-180 min", "181-210 min", "211-240 min",
+                   "241-270 min", "271+ min")
+BR <- combined_df |> filter(fluid_type=="BR")
+
+# Specify all parameter combinations
+param_grid <- expand.grid(
+  cutoffs = cutoffs,
+  compounds = compounds,
+  timepoint_use = BR_timepoint)
+
+# Calculate for all cutoff-compound-timepoint combinations
+BR_ss <- purrr::pmap_dfr(param_grid, ~ make_calculations(dataset=BR, cutoff = ..1, compound = as.character(..2), timepoint_use = ..3))
+
+BR_ss
+```
+
+```{r BR cutoff plot}
+library(patchwork)
+plot_cutoffs <- function(dataset, timepoint_use_variable, tissue, cpd){
+    # control colors and lines used in plots
+    col_val = c("#D9D9D9", "#BDBDBD", "#969696", "#636363", "#252525")
+    lines = rep("solid", 5)
+    
+    # prep data
+    df_ss <- dataset |> 
+      filter(compound == cpd) |>
+      mutate(time_window = fct_relevel(as.factor(time_window), levels(timepoint_use_variable)),
+             detection_limit = as.factor(detection_limit),
+             Sensitivity =  round(Sensitivity*100, 0),
+             Specificity =  round(Specificity*100, 0))        
+      
+    # plot sensitivity
+    p1 <- df_ss |> 
+      ggplot(aes(x = time_window, y = Sensitivity, 
+                 color = detection_limit)) + 
+      geom_line(linewidth = 1.2, aes(group = detection_limit, 
+                                linetype = detection_limit)) + 
+      geom_point(show.legend=FALSE) + 
+      ylim(0,100) +
+      scale_x_discrete(labels = function(x) str_wrap(x, width = 5)) +
+      scale_linetype_manual(values=lines) +
+      scale_color_manual(values = col_val, name = "Cutoff \n (ng/mL)",
+                        guide = guide_legend(override.aes = list(linetype = c(1),
+                        shape = rep(NA, length(lines))) )) +
+      theme_classic() +
+      theme(plot.title.position = "plot",
+            axis.title = element_text(size=14),
+            axis.text = element_text(size=10),
+            legend.position = "none", 
+            panel.grid = element_blank(),
+            strip.background = element_blank()
+            ) +
+      guides(linetype = "none") +
+      labs(x = "Time Window (min)", 
+           y = "Sensitivity", 
+           title = paste0(tissue,": ", toupper(cpd)) )
+  
+  # plot specificity
+  p2 <- df_ss |> 
+      ggplot(aes(x = time_window, y = Specificity,
+                 group = detection_limit, 
+                 color = detection_limit, 
+                 linetype = detection_limit)) + 
+      geom_line(linewidth = 1.2) +
+      geom_point() + 
+      ylim(0,100) +
+      scale_color_manual(values = col_val) +
+      scale_x_discrete(labels = function(x) str_wrap(x, width = 5)) +
+      scale_linetype_manual(values = lines, 
+                            guide = guide_legend(override.aes = list(linetype = "solid",
+                                                                     shape = rep(NA, length(lines))) )) +
+      theme_classic() +
+      theme(axis.title = element_text(size=14),
+            axis.text = element_text(size=10),
+            legend.position = c(0.35, 0.25),
+            panel.grid = element_blank(),
+            strip.background = element_blank()) +
+      labs(x = "Time Window", 
+           y = "Specificity",
+           title = "" )
+  
+  # combine plots (uses patchwork)
+  p1 + p2
+  
+}
+
+plot_cutoffs(dataset=BR_ss, 
+             timepoint_use_variable=BR$timepoint, 
+             tissue="Breath", 
+             cpd="thc")
+```
+
+The test’s sensitivity for THC detection decreases over time, indicating the accuracy of THC detection diminishes as time passes after cannabis consumption. However, specificity remains consistently high throughout the time window to effectively identify true negatives. Thus, we prioritize the importance of specificity. And high specificity also means fewer false positives.The plot shows the cutoffs of 100, 500, 1000, 3000, and 5000 ng/ml. At level 5000, the specificity is the highest among all the cutoffs, reaching 100% accuracy in identifying non-impaired drivers. Drivers testing below this cutoff are permitted to continue driving, while those exceeding it undergo further examination.
+
+This leads to our extension question, our second examination.
+ 
+  
+**Extension Question**
+
+*If the driver tests above the cutoff through breath measurement, what is the next best compound, matrix, and cutoff to best accurately determine recent cannabis use?*
+
+
+### Second Examination: THCCOOH-GLUC in Blood Matrix
+
+**Choosing Blood Matrix**
+
+We are individually plotting each compound over time for oral fluid and whole blood to determine the concentration and range throughout time. 
+```{r graphing compounds v time}
+# graphs for compounds over time
+
+plot_scatter_time <- function(matrix) {
+  cs01_nodups_long |> 
+      filter(!is.na(time_from_start), fluid_type==matrix) |>
+      ggplot(aes(x=time_from_start, y=value, color=group)) + 
+        geom_point(alpha = 0.3) +
+        geom_smooth(method="loess", se=FALSE, linetype="dashed", color="black", size=0.7) +
+    geom_vline(xintercept=c(0, 30, 60, 120, 240), linetype="dotted", color="gray60") +
+        facet_wrap(~name, scales="free") +
+        scale_color_manual(values=c("green", "purple")) +
+        theme_classic() +
+        labs(title=matrix,
+             x="Time From Start (min)") +
+        theme(legend.position="bottom",
+              legend.title=element_blank(),
+              strip.background=element_blank(),
+              plot.title.position="plot") 
+}
+
+plot_scatter_time(matrix="WB")
+plot_scatter_time(matrix="OF")
+```
+
+Looking across WB and OF matrices, whole blood is the best secondary matrix to examine for recent use due to the fact it is more accurate and reliable in many dimensions: 
+a) whole blood contains more data we can extract, b) psychoactive effects initiate from the blood streams, and c) oral fluid does not properly display impairment due to differences in expertise that can also manipulate the measurements. This explains why WB frequent users have consistently higher values across all compounds while occasional users have higher values in OF.  
+
+First, whole blood contains significantly more data/compounds compared to oral fluid which increases accuracy and range of information. Therefore, if one compound is displaying abnormal patterns, we can look further into other compounds.
+
+Next, compounds in whole blood has a stronger and more reliable results than oral fluid as psychoactive effects initiate from seeping into the bloodstream. For instance, psychoactive effects of marijuana are directly triggered when THC enters the blood into the blood stream and travels to the brain [^6]. Therefore, measuring from blood records the measurement from its origin, a piece of evidence that is hard to ignore. 
+
+Lastly, oral fluid is not reliable since the level of expertise differs per participant and can alter the results. For example, pointed out by one of our classmates, it is likely that compounds would coat the mouth of an occasional/inexperienced user more than a frequent/experienced user; less experienced users typically do not know how to inhale deep into the lungs (and thus the bloodstream) and rather hold smoke/compounds in the mouth. This results in higher values for compounds in oral fluid for occasional users over frequent users, when in fact it is highly likely the occasional users are not actually getting as much of the cannabis compounds into their blood. This confound makes OF lack accuracy in correctly identifying impairment.
+
+In the whole blood data set, frequent users consistently have higher values in compounds than occasional users. While this disparity in the level of compounds found between frequent and occasional users in whole blood can be easily remedied - by adjusting the cutoff level to be higher or have separate cutoff levels for different user groups - the inaccuracy of oral fluid cannot. Therefore, we will be focusing on the blood matrix for our second examination.
+
+[^6]: https://www.livescience.com/how-cannabis-high-works.html
+
+
+**Choosing THCCOOH-gluc Compound**
+
+Based on our investigation of the data directly, we saw a consistent trend of when THCCOOH-gluc peaks. 
+```{r thccooh_gluc graph}
+combined_df_no_plac <- combined_df |>
+  filter(treatment != "Placebo") |> # removed placebo
+  mutate(timepoint = fct_relevel(timepoint, "pre-smoking", "0-30 min", "31-70 min", "71-100 min", "101-180 min", "181-210 min", "211-240 min", "241-270 min", "271-300 min"))
+
+# View(combined_df)
+
+# Group by `id` and find the row with the max `thccooh_gluc` for each id
+max_thccooh_gluc <- combined_df_no_plac |>
+  group_by(id) |>
+  slice_max(thccooh_gluc, with_ties = FALSE) |>  # Automatically gets the row with the max value
+  ungroup()
+
+# Create a bar plot to show the count of max values per timepoint
+ggplot(max_thccooh_gluc, aes(x = timepoint)) +
+  geom_bar(fill = "steelblue") +  # Create a bar plot
+  labs(title = "THCCOOH_Gluc Consistently Peaks at 101-180 minutes Post-Smoking",
+       subtitle = "Distribution of Max THCCOOH_Gluc Levels Across Timepoints",
+       x = "Timepoint",
+       y = "Number of IDs with Max THCCOOH_Gluc Level") +
+  theme_minimal()
+```
+
+Within the whole blood matrix, the best indicator of recent cannabis usage is the compound THCCOOH-gluc. Although THCCOOH-gluc looks highly variable with no real trend in the previous WB graph with all the compounds, at a closer examination, we can see across all users, there is a consistent peak post-smoking at the 101-180 minute time point. For practical usage, this is a great advantage as stated and cited previously, the majority of users who drive after smoking do so approximately 2-4 hours after smoking. This is when they feel less or slightly impaired, and most people do not want to get behind the wheel feeling extremely impaired. Therefore, it is the best to choose a compound that persists for 2-4 hours after smoking. Our compound, THCCOOH-gluc, prominently peaks at that specific time point, representing the best compound in blood to measure for cannabis use. Note that while this graph does not differentiate between treatment groups, placebo group was excluded from this graph to highlight the trends that occur from actual cannabis intake.
+
+
+**Relationship Between THC and THCCOOH-gluc**
+
+We further analyzed the relationship between the cannabinoid, THC, and cannabinoid metabolite, THCCOOH-gluc.
+```{r thc v thccooh_gluc graph}
+peak_times <- combined_df |>
+  mutate(timepoint = fct_relevel(timepoint, "0-30 min", "31-70 min", "71-100 min", "101-180 min")) |>
+  filter(fluid_type == "WB", timepoint %in% c("0-30 min", "31-70 min", "71-100 min", "101-180 min")) |>
+  group_by(timepoint) |>
+  summarize(across(c(thc, thccooh_gluc), mean, na.rm = TRUE), .groups = "drop") |>
+  pivot_longer(cols = c(thc, thccooh_gluc), names_to = "compound", values_to = "mean_concentration")
+
+ggplot(peak_times, aes(x = timepoint, y = mean_concentration, color = compound, group = compound)) +
+  geom_line(size = 1) +
+  geom_point(size = 3) +
+  labs(title = "Inverse Trends for THC & THCCOOH_Gluc Between Peak Time Points",
+       subtitle = "Average Concentration Profiles Between 0-180 mins for THC and THCCOOH_Gluc",
+       x = "Time Point",
+       y = "Average Concentration",
+       color = "Compound") +
+  theme_minimal() +
+  theme(legend.position = "top")
+```
+
+Compared to THC, which peaks from 0-30 minutes after smoking (can be seen in compounds v time graphs), THCCOOH-gluc measurements span a significantly longer period of time, peaking at 101-180 minutes post-smoking. By examining the time between the peak of THC and the peak of THCCOOH-gluc, we can see how while THC levels decrease from their peak value, THCCOOH-gluc levels increase to their peak value. In this specific period of time between the peaks of the two compounds, from 0-180 mins after smoking, the compound trend levels between THC and THCCOOH-gluc  are inverse. This again displays the persistence of THCCOOH-gluc measurements, this time compared to THC. Many other compounds have a similar trajectory to that of THC; many peak between 0-30 minutes but do not persist. 
+
+**Calculating and Plotting Sensitivity & Specificity: Whole Blood**
+
+Similar to the sensitivity and specificity plots for the breath matrix, we will utilize similar approach to display sensitivity and specificity plots for the whole blood matrix. For the whole blood test, we also prioritize the importance of specificity. In the plots below, we plot the sensitivity and specificity graphs with different cutoffs 100, 150, 200, 400, 600 ng/mL. 
+
+```{r WB sens-spec calc}
+make_calculations <- function(dataset, cutoff, compound, timepoint_use){
+  ## remove NAs
+  df <- dataset |>
+    select(treatment, {{ compound }}, timepoint) |>
+    filter(timepoint == timepoint_use, !is.na({{ compound }}))
+
+  if(nrow(df)>0){
+    if(timepoint_use == "pre-smoking"){
+      output <- df |> 
+        summarize(TP = 0,
+                  FN = 0,
+                  FP = sum(!!sym(compound) >= cutoff),
+                  TN = sum(!!sym(compound) < cutoff)) 
+    }else{
+      if(cutoff == 0){
+        output_pre <- df |> 
+          filter(timepoint_use == "pre-smoking") |>
+          summarize(TP = 0,
+                    FN = 0,
+                    FP = sum(!!sym(compound) >= cutoff),
+                    TN = sum(!!sym(compound) < cutoff)) 
+        
+        output <- df |> 
+          filter(timepoint_use != "pre-smoking") |>
+          summarize(TP = sum(treatment != "Placebo" & !!sym(compound) > cutoff),
+                    FN = sum(treatment != "Placebo" & !!sym(compound) <= cutoff),
+                    FP = sum(treatment == "Placebo" & !!sym(compound) > cutoff),
+                    TN = sum(treatment == "Placebo" & !!sym(compound) < cutoff))
+        
+        output <- output + output_pre
+      }else{
+        output_pre <- df |> 
+          filter(timepoint_use == "pre-smoking") |>
+          summarise(TP = 0,
+                    FN = 0,
+                    FP = sum(!!sym(compound) >= cutoff),
+                    TN = sum(!!sym(compound) < cutoff)) 
+        
+        output <- df |> 
+          filter(timepoint_use != "41-90 min") |>
+          summarise(TP = sum(treatment != "Placebo" & !!sym(compound) >= cutoff),
+                    FN = sum(treatment != "Placebo" & !!sym(compound) < cutoff),
+                    FP = sum(treatment == "Placebo" & !!sym(compound) >= cutoff),
+                    TN = sum(treatment == "Placebo" & !!sym(compound) < cutoff))
+        
+        output <- output + output_pre
+      }
+    }
+  
+  # clean things up; make calculations on above values
+  output <- output |>
+    mutate(detection_limit = cutoff,
+           compound = compound,
+           time_window = timepoint_use,
+           NAs = nrow(dataset) - nrow(df),
+           N = nrow(dataset),
+           Sensitivity = (TP/(TP + FN)), 
+           Specificity = (TN /(TN + FP)),
+           PPV = (TP/(TP+FP)),
+           NPV = (TN/(TN + FN)),
+           Efficiency = ((TP + TN)/(TP + TN + FP + FN))*100
+    )
+  return(output)
+}
+}
+
+sens_spec_cpd <- function(dataset, cpd, timepoints){
+  args2 <- list(start = timepoints$start, 
+                stop = timepoints$stop, 
+                tpt_use = timepoints$timepoint)
+  out <- args2 |> 
+    pmap_dfr(make_calculations, dataset, compound = cpd)
+  return(out)
+}
+
+```
+
+```{r WB cutoffs}
+# specify which calculations to make
+cutoffs <- c(100, 150, 200, 400, 600)
+#cutoffs <- c(0.5, 0.6, 0.7, 0.8, 1)
+compounds <- cs01_nodups_long |> filter(fluid_type=="WB") |> filter(!is.na(value)) |> distinct(name) |> pull(name)
+WB_timepoint <- c("pre-smoking","0-30 min","31-70 min",
+                   "71-100 min", "101-180 min", "181-210 min",
+                   "211-240 min","241-270 min", "271-300 min", "301+ min")
+WB <- combined_df |> filter(fluid_type=="WB")
+
+# Specify all parameter combinations
+param_grid <- expand.grid(
+  cutoffs = cutoffs,
+  compounds = compounds,
+  timepoint_use = WB_timepoint)
+
+# Calculate for all cutoff-compound-timepoint combinations
+WB_ss <- purrr::pmap_dfr(param_grid, ~ make_calculations(dataset=WB, cutoff = ..1, compound = as.character(..2), timepoint_use = ..3))
+
+WB_ss
+
+```
+
+```{r WB cutoff plot}
+library(patchwork)
+plot_cutoffs <- function(dataset, timepoint_use_variable, tissue, cpd){
+    # control colors and lines used in plots
+    col_val = c("#D9D9D9", "#BDBDBD", "#969696", "#636363", "#252525")
+    lines = rep("solid", 5)
+    
+    # prep data
+    df_ss <- dataset |> 
+      filter(compound == cpd) |>
+      mutate(time_window = fct_relevel(as.factor(time_window), levels(timepoint_use_variable)),
+             detection_limit = as.factor(detection_limit),
+             Sensitivity =  round(Sensitivity*100, 0),
+             Specificity =  round(Specificity*100, 0))        
+      
+    # plot sensitivity
+    p1 <- df_ss |> 
+      ggplot(aes(x = time_window, y = Sensitivity, 
+                 color = detection_limit)) + 
+      geom_line(linewidth = 1.2, aes(group = detection_limit, 
+                                linetype = detection_limit)) + 
+      geom_point(show.legend=FALSE) + 
+      ylim(0,100) +
+      scale_x_discrete(labels = function(x) str_wrap(x, width = 5)) +
+      scale_linetype_manual(values=lines) +
+      scale_color_manual(values = col_val, name = "Cutoff \n (ng/mL)",
+                        guide = guide_legend(override.aes = list(linetype = c(1),
+                        shape = rep(NA, length(lines))) )) +
+      theme_classic() +
+      theme(plot.title.position = "plot",
+            axis.title = element_text(size=7),
+            axis.text = element_text(size=7),
+            legend.position = "none", 
+            panel.grid = element_blank(),
+            strip.background = element_blank()
+            ) +
+      guides(linetype = "none") +
+      labs(x = "Time Window (min)", 
+           y = "Sensitivity", 
+           title = paste0(tissue,": ", toupper(cpd)) )
+  
+  # plot specificity
+  p2 <- df_ss |> 
+      ggplot(aes(x = time_window, y = Specificity,
+                 group = detection_limit, 
+                 color = detection_limit, 
+                 linetype = detection_limit)) + 
+      geom_line(linewidth = 1.2) +
+      geom_point() + 
+      ylim(0,100) +
+      scale_color_manual(values = col_val) +
+      scale_x_discrete(labels = function(x) str_wrap(x, width = 5)) +
+      scale_linetype_manual(values = lines, 
+                            guide = guide_legend(override.aes = list(linetype = "solid",
+                                                                     shape = rep(NA, length(lines))) )) +
+      theme_classic() +
+      theme(axis.title = element_text(size=14),
+            axis.text = element_text(size=10),
+            legend.position = c(0.35, 0.25),
+            panel.grid = element_blank(),
+            strip.background = element_blank()) +
+      labs(x = "Time Window", 
+           y = "Specificity",
+           title = "" )
+  
+  # combine plots (uses patchwork)
+  p1 + p2
+  
+}
+
+plot_cutoffs(dataset=WB_ss, 
+             timepoint_use_variable=WB$timepoint, 
+             tissue="Blood", 
+             cpd="thccooh_gluc")
+```
+
+Plotting the sensitivity and specificity of the compound THCCOOH-gluc in whole blood, we get a variety of lines, each with their own confidence level. Noticing that there is not much confidence on the sensitivity lines for each detection limit (all the lines being generally under 25%), we decided to primarily focus on specificity. As mentioned before, specificity is a True Negative detection measurement. In this case, we are using specificity to determine a dose level in which we are certain that the drivers are not impaired. 
+
+Looking at our graphs, we are only able to visibly see 4 detection limit lines out of 5. However, this just indicates that some limits overlap with others, in other words, some limit lines have the same confidence range as other lines. Our cutoffs (detection limits) were determined using the facet wrap graphs of all compounds in whole blood shown earlier in this report. We noticed a 100% confidence constant for a detection limit of 600, as a result, we decided to conclude a cutoff value of less than 600 ng/mL to determine that a driver is not driving while impaired on cannabis. 
+
+
+## Conclusion
+Due to the aforementioned data analysis we performed, we decided on a two-step screening in order to determine whether a person stopped on the roadside has recently used and is impaired/driving under the influence of cannabis. First, we deemed a roadside screening of THC levels in breath as a good preliminary indicator of recent cannabis usage using a cutoff of 5,000 ng/mL. Using that cutoff, any driver above the cutoff level would then be prevented from further driving under the influence of cannabis and taken in for further examination. The second examination we decided on was looking at THCCOOH_gluc levels in whole blood with a cutoff of 600 ng/mL. This cutoff properly accounts for frequent users, to ensure that they would not be incorrectly accused of impairment from remnants of previous smoking sessions. If the person suspected of impairment is also above the secondary cutoff level of 600 ng/mL of THCCOOH_gluc in whole blood, they would be identified as being impaired and go through any other law proceedings necessary.
+
+In choosing these matrices, compounds, and cutoff values to determine impairment, one limitation influencing our decisions is the fact that the study dosages of cannabis given to participants is significantly lower than what an average person smoking marijuana would actually use; in real life, marijuana users use much higher dosages. Despite this limitation, our focus on specificity actually provides a possible solution because users would presumably have higher compound levels than the ones recorded in the study, making the cutoff values less lenient for real life-application (higher sensitivity) than it appears to be when compared to the study participants. Another limitation to note is not knowing the driving simulator data that is paired with the rest of the study. The study did have participants performing with a driving simulator while under the influence, recording that data in tandem with all of the other variables we see in the data here. If we did, our answer to the question may change based on the data for reaction time or number of crashes related to the compound levels in the users. Overall, our data analysis both demonstrates and overcomes the obstacles faced when it comes to determining impairment of a cannabis user for DUIC laws. 
